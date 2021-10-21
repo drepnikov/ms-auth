@@ -4,6 +4,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"github.com/golang-jwt/jwt"
 	"log"
 	"net/http"
@@ -32,11 +33,57 @@ type SigninResponse struct {
 	Token string `json:"token"`
 }
 
+type VeryprivateResponse struct {
+	Balance string `json:"balance"`
+}
+
 func setupCorsResponse(w *http.ResponseWriter, r *http.Request) {
 	(*w).Header().Set("Access-Control-Allow-Origin", "*")
 	(*w).Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE")
 
-	(*w).Header().Set("Access-Control-Allow-Headers", "Accept, Content-Type, Content-Length, Authorization")
+	(*w).Header().Set("Access-Control-Allow-Headers", "Accept, Content-Type, Content-Length, Authorization, x-repa-header")
+}
+
+func veryprivate(w http.ResponseWriter, r *http.Request) {
+
+	tokenString := r.Header.Get("x-repa-header")
+
+	if len(tokenString) == 0 {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
+	claims := &Claims{}
+
+	token, err := jwt.ParseWithClaims(tokenString, claims, func(tkn *jwt.Token) (interface{}, error) {
+		return jwtKey, nil
+	})
+
+	if err != nil {
+		fmt.Println("Невалидный токен")
+
+		if err == jwt.ErrSignatureInvalid {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	if !token.Valid {
+		fmt.Println("Не знаю когда эта ошибка случается")
+
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
+	err = json.NewEncoder(w).Encode(VeryprivateResponse{
+		Balance: "милион баксычей",
+	})
+
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+	}
 }
 
 func signin(w http.ResponseWriter, r *http.Request) {
@@ -94,6 +141,8 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	switch path {
 	case "/signin":
 		signin(w, r)
+	case "/veryprivate":
+		veryprivate(w, r)
 	default:
 		http.NotFound(w, r)
 	}
